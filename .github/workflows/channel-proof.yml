@@ -1,0 +1,46 @@
+name: channel-independent write-deny proof
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+      - name: Install kernel-observation tools
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap strace
+      - name: Enable unprivileged user namespaces where AppArmor restricts them
+        run: |
+          if sysctl -N kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - name: Unit-test denial parsing and redaction
+        run: python3 -m unittest discover -s tests -v
+      - name: Prove the real Obsigna MCP proxy does not observe the non-MCP path
+        run: bash scripts/obsigna_comparison.sh
+      - name: Prove bwrap denies the same non-MCP path at the OS boundary
+        run: bash scripts/bwrap_comparison.sh
+      - name: Upload proof logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-proof-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/channel-proof-obsigna/result.json
+            ${{ runner.temp }}/channel-proof-obsigna/proxy.stderr
+            ${{ runner.temp }}/bwrap-events.jsonl
+            ${{ runner.temp }}/bwrap.stderr
