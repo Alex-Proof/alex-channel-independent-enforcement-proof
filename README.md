@@ -31,8 +31,9 @@ On `ubuntu-22.04`, `ubuntu-24.04`, and `ubuntu-latest`, the workflow:
 1. builds the real `obsigna-mcp` binary from the pinned commit;
 2. sends a demo `tools/call` through it and verifies that the proxy blocks and logs that mediated call;
 3. runs the same write directly, outside MCP, and verifies that it completes without appearing in the proxy logs;
-4. runs that direct write under a read-only `bwrap` mount namespace;
-5. captures the resulting kernel `EROFS` or `EACCES` with `strace`, emitting only a redacted JSONL event.
+4. confirms the sandbox's `/dev` is a minimal, isolated `devtmpfs` with zero block-device nodes (not a bind-mount of the host's real `/dev`), so a raw block-device write can't silently bypass the read-only mount below;
+5. runs that direct write under the same read-only `bwrap` mount namespace;
+6. captures the resulting kernel `EROFS` or `EACCES` with `strace`, emitting only a redacted JSONL event.
 
 The observer is intentionally small and newly written for this public proof. It is not the private ALEX implementation and contains no customer policy, capability pack, or production integration.
 
